@@ -1,4 +1,6 @@
-# treecat
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gustavgauge/treecat/main/.assets/treecat-logo.png" alt="TreeCat Logo" width="300">
+</p>
 
 A versatile command-line utility that creates a comprehensive text snapshot of a directory. It combines a `tree`-like view with the concatenated contents of your files, making it perfect for documentation, context-sharing, and AI model input.
 
@@ -83,19 +85,18 @@ Using the `-b` or `--bloat` flag will exclude a comprehensive list of common art
 
 Create a snapshot of the current directory, including the tree view and excluding bloat, then save it to a file. This is the most common use case.
 ```bash
-treecat -t -b -o project-snapshot.txt```
+treecat -t -b -o project-snapshot.txt
+```
 
 ### Tree-Only View
 
 Generate a clean directory structure diagram for your `README.md`.
 ```bash
-treecat -y -b src/
-```
+treecat -y -b src/```
 
 ### Highly Specific Filtering
 
-Snapshot only the Markdown and JavaScript files from the `docs` and `src` directories.
-```bash
+Snapshot only the Markdown and JavaScript files from the `docs` and `src` directories.```bash
 treecat -t -b -i '*.md' -i '*.js' docs src -o docs-and-src.txt
 ```
 
