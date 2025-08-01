@@ -113,7 +113,6 @@ if [[ "$show_tree" == true || "$only_tree" == true ]]; then
     tree_opts=(-a)
     if [[ ${#bloat_patterns[@]} -gt 0 ]]; then
       # Join array with | for the tree ignore pattern
-      # https://stackoverflow.com/a/5384188
       ignore_pattern=$(printf "|%s" "${bloat_patterns[@]}")
       ignore_pattern=${ignore_pattern:1}
       tree_opts+=(-I "$ignore_pattern")
@@ -146,7 +145,12 @@ if [[ ${#bloat_patterns[@]} -gt 0 ]]; then
 fi
 find_args+=(-type f -print)
 
-mapfile -t raw_files < <(find "${find_args[@]}" | sort)
+# Use a while-read loop for compatibility with older Bash versions (like on macOS)
+declare -a raw_files=()
+while IFS= read -r file; do
+    raw_files+=("$file")
+done < <(find "${find_args[@]}" | sort)
+
 
 ########################################
 # (3) Apply include/exclude patterns
@@ -155,16 +159,19 @@ for f in "${raw_files[@]}"; do
   # Normalize path for matching
   p=${f#./}
 
-  # Process excludes first
+  # --- FIX STARTS HERE ---
+  # Process excludes first only if the excludes array has elements
   skip=false
-  for pat in "${excludes[@]}"; do
-    # Use [[ for extended globbing
-    if [[ $p == $pat ]]; then
-      skip=true
-      break
-    fi
-  done
+  if ((${#excludes[@]})); then
+    for pat in "${excludes[@]}"; do
+      if [[ $p == $pat ]]; then
+        skip=true
+        break
+      fi
+    done
+  fi
   $skip && continue
+  # --- FIX ENDS HERE ---
 
   # Process includes if any are specified
   if ((${#includes[@]})); then
@@ -183,11 +190,17 @@ done
 ########################################
 # (4) Output file contents
 for f in "${files[@]}"; do
-  if [[ "$headers" == true ]]; then
-    printf '\n===== BEGIN %s =====\n' "$f"
-  fi
-  cat "$f"
-  if [[ "$headers" == true ]]; then
-    printf '\n===== END %s =====\n' "$f"
+  # Skip empty files
+  [[ -s "$f" ]] || continue
+
+  # Check if file is text-based before printing
+  if [[ "$(file -b --mime-type "$f")" == text/* || "$(file -b --mime-type "$f")" == application/json ]]; then
+    if [[ "$headers" == true ]]; then
+      printf '\n===== BEGIN %s =====\n' "$f"
+    fi
+    cat "$f"
+    if [[ "$headers" == true ]]; then
+      printf '\n===== END %s =====\n' "$f"
+    fi
   fi
 done
