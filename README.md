@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/gustavgauge/treecat/main/.assets/treecat-logo.png" alt="TreeCat Logo" width="300">
+  <img src="https://raw.githubusercontent.com/gustavgauge/treecat/main/.assets/treecat.png" alt="TreeCat Logo" width="300">
 </p>
 
 A versatile command-line utility that creates a comprehensive text snapshot of a directory. It combines a `tree`-like view with the concatenated contents of your files, making it perfect for documentation, context-sharing, and AI model input.
