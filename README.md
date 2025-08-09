@@ -10,7 +10,12 @@ A versatile command-line utility that creates a comprehensive text snapshot of a
 - **Intelligent Filtering**: Automatically excludes common bloat files and directories (`.git`, `node_modules`, `build`, etc.) to keep snapshots clean.
 - **Pattern Matching**: Precisely include or exclude files and directories using shell glob patterns.
 - **Flexible Output**: Print to the console or redirect to a file for easy sharing.
-- **Zero Dependencies**: Written in pure Bash with common Unix utilities (requires optional `tree` for visualization).
+- **Size & Line Limits**: Truncate each file by bytes or lines to keep snapshots concise.
+- **Binary Handling**: Choose how non-text files are handled: `skip` (default), `hex`, or `base64`.
+- **Git-Aware**: Optionally use `git ls-files` to respect `.gitignore` and submodules.
+- **Symlink Support**: Optionally follow symlinks when scanning.
+- **Deterministic Ordering**: Sorted by default for stable diffs; can preserve discovery order.
+- **Pure Bash**: Uses standard Unix tools; `tree` is optional for the directory view.
 
 ## Use Cases
 
@@ -51,17 +56,30 @@ treecat [OPTIONS] [--] [DIR1 [DIR2 ...]]
 
 ### Options
 
-| Option                | Description                                                          |
-| --------------------- | -------------------------------------------------------------------- |
-| `-t, --tree`          | Print directory tree before file contents.                           |
-| `-y, --only-tree`     | Only print the tree (no file contents).                              |
-| `-T, --no-tree`       | Skip the tree view (default).                                        |
-| `-b, --bloat`         | Exclude common bloat files and directories (recommended).            |
-| `-i, --include PAT`   | Include only files matching a shell pattern (can be repeated).       |
-| `-x, --exclude PAT`   | Exclude files matching a shell pattern (can be repeated).            |
-| `-n, --no-header`     | Omit the `BEGIN/END` markers around each file's content.             |
-| `-o, --output FILE`   | Write the snapshot to a file instead of standard output.             |
-| `-h, --help`          | Show this help and exit.                                             |
+| Option                  | Description                                                                 |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `-t, --tree`            | Print directory tree before file contents.                                  |
+| `-y, --only-tree`       | Only print the tree (no file contents).                                     |
+| `-T, --no-tree`         | Skip the tree view (default).                                               |
+| `-b, --bloat`           | Exclude common bloat files and directories (recommended).                   |
+| `-i, --include PATTERN` | Include only files matching a shell pattern (can be repeated).              |
+| `-x, --exclude PATTERN` | Exclude files matching a shell pattern (can be repeated).                   |
+| `-n, --no-header`       | Omit the `BEGIN/END` markers around each file's content.                    |
+| `-o, --output FILE`     | Write the snapshot to a file instead of standard output.                    |
+| `--max-bytes N`         | Truncate each file after N bytes (per-file limit). `0` = unlimited.         |
+| `--max-lines N`         | Truncate each file after N lines (per-file limit). `0` = unlimited.         |
+| `--binary MODE`         | How to handle non-text files: `skip` (default), `hex`, or `base64`.         |
+| `--follow-symlinks`     | Follow symlinks when scanning.                                              |
+| `--git`                 | List files from Git (respects `.gitignore` and submodules); falls back to `find`. |
+| `--no-sort`             | Do not sort file list; keep discovery order.                                |
+| `--version`             | Print version and exit.                                                      |
+| `-h, --help`            | Show help and exit.                                                          |
+
+#### Notes
+
+- **Pattern matching** uses Bash globs against relative paths (e.g., `src/**/*.ts`, `*/.venv/*`).
+- **Excludes** match directory prefixes as well (e.g., `-x .venv` also excludes `.venv/...`).
+- The `tree` command is optional; install via your package manager if you use `-t`/`-y`.
 
 ### Bloat Exclusions
 
@@ -92,11 +110,13 @@ treecat -t -b -o project-snapshot.txt
 
 Generate a clean directory structure diagram for your `README.md`.
 ```bash
-treecat -y -b src/```
+treecat -y -b src/
+```
 
 ### Highly Specific Filtering
 
-Snapshot only the Markdown and JavaScript files from the `docs` and `src` directories.```bash
+Snapshot only the Markdown and JavaScript files from the `docs` and `src` directories.
+```bash
 treecat -t -b -i '*.md' -i '*.js' docs src -o docs-and-src.txt
 ```
 
@@ -105,6 +125,40 @@ treecat -t -b -i '*.md' -i '*.js' docs src -o docs-and-src.txt
 Snapshot an entire project but explicitly exclude all test files.
 ```bash
 treecat -t -b -x '*/test/*' -x '*_test.go'
+```
+
+### Respect .gitignore via Git
+
+Use Git for file discovery, respecting `.gitignore` and submodules.
+```bash
+treecat -t -b --git -o project-snapshot.txt
+```
+
+### Limit Per-File Size
+
+Truncate each file after 20 KB to keep snapshots small.
+```bash
+treecat -b --max-bytes 20000 -o small-snapshot.txt
+```
+
+### Include Binary Files
+
+Emit binary files as Base64 (or hex) instead of skipping them.
+```bash
+treecat -b --binary base64 -o with-binaries.txt
+```
+
+### Follow Symlinks
+
+```bash
+treecat -b --follow-symlinks
+```
+
+### Preserve Discovery Order
+
+Disable sorting if you prefer the natural discovery order.
+```bash
+treecat --no-sort
 ```
 
 ## Output Format
