@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# treecat.sh (enhanced)
+# treecat.sh (portable version)
 # Create a snapshot of a directory structure and its file contents.
 # Combines a 'tree' view with concatenated file contents, with smart
-# filtering, size/line limits, and better portability.
+# filtering, size/line limits, and full OS portability.
 
 set -euo pipefail
 
-VERSION="1.2.1"
+VERSION="1.3.0"
 
 usage() {
   cat <<'EOF'
@@ -36,7 +36,7 @@ Options:
   -h, --help                  Show this help and exit.
 
 Notes:
-  - Pattern matching uses Bash globs against relative paths (e.g., 'src/**/*.ts', '*/.venv/*').
+  - Pattern matching uses shell globs against relative paths (e.g., 'src/**/*.ts', '*/.venv/*').
   - Excludes match directory prefixes as well (e.g., '-x .venv' also excludes '.venv/...').
   - Requires 'tree' for the tree view (install via your package manager).
 EOF
@@ -121,9 +121,26 @@ fi
 ########################################
 # Helpers
 is_text_like() {
-  local f="$1"; local mt
-  mt=$(file -b --mime-type -- "$f" 2>/dev/null || true)
-  [[ $mt == text/* || $mt == application/json ]] && return 0 || return 1
+  local f="$1"
+  # Check if file command exists
+  if ! command -v file >/dev/null 2>&1; then
+    # Fallback: check common text extensions
+    case "$f" in
+      *.txt|*.md|*.py|*.js|*.ts|*.go|*.rs|*.c|*.cpp|*.h|*.hpp|*.java|*.rb|*.sh|*.bash|*.zsh|*.fish|*.json|*.xml|*.yaml|*.yml|*.toml|*.ini|*.conf|*.config|*.log|*.csv|*.sql|*.html|*.css|*.scss|*.sass|*.less)
+        return 0 ;;
+      *)
+        # Try to detect binary content by checking for null bytes in first 512 bytes
+        if head -c 512 "$f" 2>/dev/null | grep -q $'\x00'; then
+          return 1
+        else
+          return 0
+        fi ;;
+    esac
+  else
+    local mt
+    mt=$(file -b --mime-type -- "$f" 2>/dev/null || true)
+    [[ $mt == text/* || $mt == application/json || $mt == application/xml || $mt == application/x-empty ]] && return 0 || return 1
+  fi
 }
 
 print_tree() {
@@ -154,6 +171,8 @@ print_tree() {
     echo "WARNING: 'tree' command not found; skipping directory tree view." >&2
     echo "         On macOS: brew install tree" >&2
     echo "         On Debian/Ubuntu: sudo apt-get install -y tree" >&2
+    echo "         On RHEL/CentOS: sudo yum install -y tree" >&2
+    echo "         On Alpine: apk add tree" >&2
   fi
 }
 
@@ -161,9 +180,11 @@ get_size_bytes() {
   # Cross-platform file size in bytes (Linux/BSD/macOS)
   local f="$1"
   if stat -f%z "$f" >/dev/null 2>&1; then
+    # BSD/macOS style
     stat -f%z "$f"
   else
-    stat -c%s "$f"
+    # GNU/Linux style
+    stat -c%s "$f" 2>/dev/null || stat --format=%s "$f"
   fi
 }
 
@@ -174,10 +195,11 @@ print_file_with_limits() {
   fi
 
   if (( max_bytes > 0 )); then
-    # Print up to max_bytes safely
-    dd if="$f" bs=1 count="$max_bytes" status=none
+    # Print up to max_bytes safely (dd is POSIX)
+    dd if="$f" bs=1 count="$max_bytes" 2>/dev/null || head -c "$max_bytes" "$f"
   elif (( max_lines > 0 )); then
-    awk -v m="$max_lines" 'NR<=m{print; if(NR==m) exit 0}' -- "$f"
+    # Use head instead of awk for better portability
+    head -n "$max_lines" "$f"
   else
     cat -- "$f"
   fi
@@ -206,6 +228,16 @@ should_skip_by_patterns() {
   return 1
 }
 
+# Portable array reading function (replaces mapfile)
+read_array_from_pipe() {
+  local -n arr=$1  # nameref to the array variable
+  local line
+  arr=()  # Clear the array
+  while IFS= read -r line; do
+    arr+=("$line")
+  done
+}
+
 ########################################
 # (1) Directory tree
 if [[ "$show_tree" == true || "$only_tree" == true ]]; then
@@ -220,9 +252,9 @@ raw_files=()
 if [[ "$use_git" == true ]] && command -v git >/dev/null 2>&1; then
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     # Use git ls-files to respect .gitignore and include submodules
-    while IFS= read -r -d '' f; do raw_files+=("$f"); done < <(
-      git ls-files -z --recurse-submodules -- "${search_dirs[@]}" 2>/dev/null || true
-    )
+    while IFS= read -r -d '' f; do 
+      raw_files+=("$f")
+    done < <(git ls-files -z --recurse-submodules -- "${search_dirs[@]}" 2>/dev/null || true)
   fi
 fi
 
@@ -245,10 +277,12 @@ if [[ ${#raw_files[@]} -eq 0 ]]; then
 
   find_cmd+=(-type f -print0)
 
-  while IFS= read -r -d '' f; do raw_files+=("$f"); done < <("${find_cmd[@]}" 2>/dev/null)
+  while IFS= read -r -d '' f; do 
+    raw_files+=("$f")
+  done < <("${find_cmd[@]}" 2>/dev/null)
 fi
 
-# Normalize to relative, sort if requested
+# Normalize to relative
 rel_files=()
 for f in "${raw_files[@]}"; do
   case "$f" in
@@ -257,9 +291,14 @@ for f in "${raw_files[@]}"; do
   esac
 done
 
+# Sort if requested (portable replacement for mapfile)
 if [[ "$no_sort" == false ]]; then
-  # Stable POSIX sort, C locale for speed
-  mapfile -t rel_files < <(printf '%s\n' "${rel_files[@]}" | LC_ALL=C sort)
+  # Create temporary array for sorted files
+  sorted_files=()
+  while IFS= read -r line; do
+    sorted_files+=("$line")
+  done < <(printf '%s\n' "${rel_files[@]}" | LC_ALL=C sort)
+  rel_files=("${sorted_files[@]}")
 fi
 
 ########################################
@@ -290,7 +329,8 @@ done
 ########################################
 # (4) Output file contents
 for p in "${files[@]}"; do
-  # Skip empty files fast
+  # Skip if file doesn't exist or is empty
+  [[ -f "$p" ]] || continue
   [[ -s "$p" ]] || continue
 
   if is_text_like "$p"; then
@@ -299,17 +339,28 @@ for p in "${files[@]}"; do
     case "$binary_mode" in
       skip)   ;; # do nothing
       hex)
-        if [[ "$headers" == true ]]; then printf '\n===== BEGIN %s (hex) =====\n' "$p"; fi
-        xxd -p -c 16 -- "$p"
-        if [[ "$headers" == true ]]; then printf '\n===== END %s (hex) =====\n' "$p"; fi
+        if command -v xxd >/dev/null 2>&1; then
+          if [[ "$headers" == true ]]; then printf '\n===== BEGIN %s (hex) =====\n' "$p"; fi
+          xxd -p -c 16 -- "$p"
+          if [[ "$headers" == true ]]; then printf '\n===== END %s (hex) =====\n' "$p"; fi
+        elif command -v hexdump >/dev/null 2>&1; then
+          if [[ "$headers" == true ]]; then printf '\n===== BEGIN %s (hex) =====\n' "$p"; fi
+          hexdump -C "$p"
+          if [[ "$headers" == true ]]; then printf '\n===== END %s (hex) =====\n' "$p"; fi
+        else
+          echo "WARNING: Neither xxd nor hexdump found for hex output" >&2
+        fi
         ;;
       base64)
-        if [[ "$headers" == true ]]; then printf '\n===== BEGIN %s (base64) =====\n' "$p"; fi
-        base64 -- "$p"
-        if [[ "$headers" == true ]]; then printf '\n===== END %s (base64) =====\n' "$p"; fi
+        if command -v base64 >/dev/null 2>&1; then
+          if [[ "$headers" == true ]]; then printf '\n===== BEGIN %s (base64) =====\n' "$p"; fi
+          base64 -- "$p" 2>/dev/null || base64 "$p"  # Some versions don't support --
+          if [[ "$headers" == true ]]; then printf '\n===== END %s (base64) =====\n' "$p"; fi
+        else
+          echo "WARNING: base64 command not found" >&2
+        fi
         ;;
       *) echo "Unknown --binary mode: $binary_mode" >&2; exit 1 ;;
     esac
   fi
-
 done
