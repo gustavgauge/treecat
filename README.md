@@ -41,14 +41,17 @@ sudo apt-get update && sudo apt-get install -y tree
 This command downloads the script to `/usr/local/bin`, making it available as a system-wide command. You may be prompted for your password.
 
 ```bash
-sudo curl -sL https://raw.githubusercontent.com/gustavgauge/treecat/main/treecat.sh -o /usr/local/bin/treecat && sudo chmod +x /usr/local/bin/treecat
+curl -fsSL https://raw.githubusercontent.com/gustavgauge/treecat/main/treecat.sh -o /tmp/treecat
+chmod +x /tmp/treecat
+sudo mv /tmp/treecat /usr/local/bin/treecat
 ```
 
 ### From a Clone
 
 ```bash
-git clone git@github.com:gustavgauge/treecat.git
+git clone https://github.com/gustavgauge/treecat.git
 cd treecat
+mkdir -p ~/.local/bin
 ln -sf "$PWD/treecat.sh" ~/.local/bin/treecat
 ```
 
