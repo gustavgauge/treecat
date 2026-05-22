@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/gustavgauge/treecat/main/.assets/treecat.png" alt="TreeCat Logo" width="300">
-</p>
-
 A versatile command-line utility that creates a comprehensive text snapshot of directories or individual files. It combines a `tree`-like view with concatenated file contents and optional AI-context sizing, making it useful for documentation, code review, archiving, and model input.
 
 ## Features
